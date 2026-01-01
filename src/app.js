@@ -447,14 +447,10 @@ function renderSessionDetails(teacher, sessionIdx) {
         <div id="qrContainer" style="display:none; text-align:center; margin-top:20px;">
             <div class="qr-box">
                 <div id="qrcode"></div>
-                <div class="panel" style="margin-top:12px; word-break:break-all; color:#1d4ed8; display:none;" id="urlPanel">
-                    رابط الطالب:<br><span id="studentUrl">${studentUrl}</span>
-                </div>
                 <div class="button-row" style="margin-top:12px;">
                     <button id="copyUrlBtn" class="session-btn">نسخ الرابط</button>
                     <button id="downloadQrBtn" class="session-btn">حفظ صورة الباركود</button>
                 </div>
-                <div style="margin-top:10px; width:100%; text-align:center;"><img id="qrcodeImg" alt="QR" style="max-width:300px; border-radius:10px; display:block; margin:6px auto;"></div>
             </div>
         </div>
         <div class="button-row" style="justify-content:center; margin-top:14px;"><button id="backBtn" class="btn-ghost">رجوع</button></div>
@@ -470,8 +466,6 @@ function renderSessionDetails(teacher, sessionIdx) {
         generateQRDataURL(studentUrl, (dataURL) => {
             if (dataURL) {
                 qrEl.innerHTML = `<img src="${dataURL}" style="max-width:300px; border-radius:6px;">`;
-                const img = document.getElementById('qrcodeImg');
-                if (img) img.src = dataURL;
                 return;
             }
             // جرب تحميل/استخدام المكتبة ثم إنشاء QR مباشرة
@@ -489,9 +483,8 @@ function renderSessionDetails(teacher, sessionIdx) {
                     });
                     setTimeout(()=>{
                         const canvas = qrEl.querySelector('canvas');
-                        const img = document.getElementById('qrcodeImg');
-                        if (canvas && img) {
-                            try { img.src = canvas.toDataURL('image/png'); } catch(e){ console.warn('Could not create image from canvas after instantiate', e); }
+                        if (canvas) {
+                            // Canvas جاهز للتحميل
                         }
                     }, 50);
                 } catch (e) {
@@ -510,10 +503,8 @@ function renderSessionDetails(teacher, sessionIdx) {
     // زر لحفظ صورة الباركود - ننتظر أن يتواجد الكانفس بعد التوليد
     document.getElementById('downloadQrBtn').onclick = () => {
         const canvas = document.querySelector('#qrcode canvas');
-        const img = document.getElementById('qrcodeImg');
         if (canvas) {
             const dataUrl = canvas.toDataURL('image/png');
-            if (img) img.src = dataUrl;
             // فتح الصورة في تبويب جديد
             const w = window.open('about:blank');
             w.document.write(`<img src="${dataUrl}" alt="QR">`);
@@ -659,7 +650,7 @@ function renderSessionResults(teacher, sessionIdx) {
         const ans = JSON.parse(localStorage.getItem(`answers_${phone}_${sIdx}`) || '[]');
         renderStudentDetails(t, sIdx, ans[aIdx]);
     };
-    document.getElementById('backBtn').onclick = () => renderSessionDetails(teacher, sessionIdx);
+    document.getElementById('backBtn').onclick = () => renderTeacherHome(teacher);
 }
 
 function calcStudentScore(session, answers) {
