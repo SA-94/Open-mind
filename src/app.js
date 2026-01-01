@@ -24,6 +24,36 @@ const JSONBIN_API_KEY = '$2a$10$u60d0G.BqvU7IAmt8xch.udS5Z4lIe9PtSy4khmtd.0MqHkR
 const JSONBIN_BASE = 'https://api.jsonbin.io/v3';
 let _binCache = {}; // cache لـ bin IDs
 
+// توليد device fingerprint بسيط لمنع الغش بجوال آخر
+function getDeviceFingerprint() {
+    const nav = navigator;
+    const screen = window.screen;
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    ctx.textBaseline = 'top';
+    ctx.font = '14px Arial';
+    ctx.fillText('fingerprint', 2, 2);
+    const canvasData = canvas.toDataURL();
+    
+    const fingerprint = [
+        nav.userAgent,
+        nav.language,
+        screen.colorDepth,
+        screen.width + 'x' + screen.height,
+        new Date().getTimezoneOffset(),
+        canvasData.substring(0, 100)
+    ].join('|');
+    
+    // hash بسيط
+    let hash = 0;
+    for (let i = 0; i < fingerprint.length; i++) {
+        const char = fingerprint.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash;
+    }
+    return 'dev_' + Math.abs(hash).toString(36);
+}
+
 function getSessionBinId(phone, idx) {
     const key = `bin_${phone}_${idx}`;
     return localStorage.getItem(key) || null;
@@ -396,7 +426,6 @@ function renderSessionDetails(teacher, sessionIdx) {
     const studentUrl = getStudentUrl(teacher.phone, sessionIdx);
     app.innerHTML = `
         <div class="title">تفاصيل الجلسة</div>
-        <div class="subtitle">شارك الباركود مباشرة، أو انسخ الرابط للطلاب.</div>
         <div class="card" style="margin-bottom:14px;">
             <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
                 <div>
@@ -409,25 +438,31 @@ function renderSessionDetails(teacher, sessionIdx) {
                 </div>
             </div>
         </div>
-        <div class="qr-box" style="text-align:center;">
-            <div id="qrcode"></div>
-            <div class="panel" style="margin-top:12px; word-break:break-all; color:#1d4ed8;">
-                رابط الطالب:<br><span id="studentUrl">${studentUrl}</span>
+        <div class="button-row" style="margin-top:12px;">
+            <button id="showQrBtn" class="session-btn">عرض الباركود</button>
+            <button id="startExamBtn" class="session-btn btn-start">${session.started? 'إيقاف الاختبار':'بدء الاختبار'}</button>
+            <button id="toggleActiveBtn" class="session-btn">${session.active===false? 'فتح الباركود':'قفل الباركود'}</button>
+            <button id="showResultsBtn" class="session-btn btn-secondary">عرض النتائج</button>
+        </div>
+        <div id="qrContainer" style="display:none; text-align:center; margin-top:20px;">
+            <div class="qr-box">
+                <div id="qrcode"></div>
+                <div class="panel" style="margin-top:12px; word-break:break-all; color:#1d4ed8; display:none;" id="urlPanel">
+                    رابط الطالب:<br><span id="studentUrl">${studentUrl}</span>
+                </div>
+                <div class="button-row" style="margin-top:12px;">
+                    <button id="copyUrlBtn" class="session-btn">نسخ الرابط</button>
+                    <button id="downloadQrBtn" class="session-btn">حفظ صورة الباركود</button>
+                </div>
+                <div style="margin-top:10px; width:100%; text-align:center;"><img id="qrcodeImg" alt="QR" style="max-width:300px; border-radius:10px; display:block; margin:6px auto;"></div>
             </div>
-            <div class="button-row" style="margin-top:12px;">
-                <button id="copyUrlBtn" class="session-btn">نسخ الرابط</button>
-                <button id="downloadQrBtn" class="session-btn">حفظ صورة الباركود</button>
-                <button id="openStudentBtn" class="session-btn">فتح واجهة طالب</button>
-                <button id="startExamBtn" class="session-btn btn-start">${session.started? 'إيقاف الاختبار':'بدء الاختبار'}</button>
-                <button id="toggleActiveBtn" class="session-btn">${session.active===false? 'فتح الباركود':'قفل الباركود'}</button>
-                <button id="showResultsBtn" class="session-btn btn-secondary">عرض النتائج</button>
-            </div>
-            <div style="margin-top:10px; width:100%; text-align:center;"><img id="qrcodeImg" alt="QR" style="max-width:300px; border-radius:10px; display:block; margin:6px auto;"></div>
         </div>
         <div class="button-row" style="justify-content:center; margin-top:14px;"><button id="backBtn" class="btn-ghost">رجوع</button></div>
     `;
     // تحميل/توليد QR: نجرب توليد data-URL أولاً، ثم نحاول تحميل المكتبة محلياً/من CDN كبدائل
     function showQR() {
+        const qrContainer = document.getElementById('qrContainer');
+        qrContainer.style.display = 'block';
         const qrEl = document.getElementById('qrcode');
         if (!qrEl) return;
         qrEl.innerHTML = '';
@@ -919,6 +954,21 @@ function renderStudentWaiting(teacherPhone, sessionIdx, name, id) {
 function renderStudentExam(teacherPhone, sessionIdx, studentName, studentId) {
     const teacher = JSON.parse(localStorage.getItem('teacher_' + teacherPhone));
     const session = teacher.sessions[sessionIdx];
+    
+    // فحص device fingerprint - منع إعادة الدخول بجوال آخر
+    const deviceId = getDeviceFingerprint();
+    const deviceKickKey = `kicked_device_${teacherPhone}_${sessionIdx}_${deviceId}`;
+    const deviceKickData = localStorage.getItem(deviceKickKey);
+    if (deviceKickData) {
+        const kick = JSON.parse(deviceKickData);
+        app.innerHTML = `
+            <div class="title">تم حظر هذا الجهاز من الاختبار</div>
+            <div style='color:#d32f2f; margin-top:12px;'>${kick.reason}</div>
+            <div style='margin-top:12px; color:#666;'>لا يمكن لهذا الجهاز إعادة الدخول للاختبار بأي طريقة.</div>
+            <div style='margin-top:8px; color:#999; font-size:0.9rem;'>الطالب السابق: ${kick.studentId || 'غير محدد'}</div>
+        `;
+        return;
+    }
     
     // فحص إذا كان الطالب مطرود من قبل
     const kickKey = `kicked_${teacherPhone}_${sessionIdx}_${studentId}`;
