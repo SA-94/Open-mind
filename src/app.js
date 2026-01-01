@@ -366,7 +366,12 @@ function generateQRDataURL(text, callback) {
         tempDiv.style.display = 'none';
         document.body.appendChild(tempDiv);
         try {
-            new window.QRCode(tempDiv, { text: text, width: 200, height: 200 });
+            new window.QRCode(tempDiv, { 
+                text: text, 
+                width: 300, 
+                height: 300,
+                correctLevel: window.QRCode.CorrectLevel ? window.QRCode.CorrectLevel.H : 2
+            });
             setTimeout(() => {
                 const canvas = tempDiv.querySelector('canvas');
                 if (canvas) {
@@ -421,7 +426,7 @@ function renderSessionDetails(teacher, sessionIdx) {
                 <button id="toggleActiveBtn" class="session-btn">${session.active===false? 'فتح الباركود':'قفل الباركود'}</button>
                 <button id="showResultsBtn" class="session-btn btn-secondary">عرض النتائج</button>
             </div>
-            <div style="margin-top:10px; width:100%; text-align:center;"><img id="qrcodeImg" alt="QR" style="max-width:160px; border-radius:10px; display:block; margin:6px auto;"></div>
+            <div style="margin-top:10px; width:100%; text-align:center;"><img id="qrcodeImg" alt="QR" style="max-width:300px; border-radius:10px; display:block; margin:6px auto;"></div>
         </div>
         <div class="button-row" style="justify-content:center; margin-top:14px;"><button id="backBtn" class="btn-ghost">رجوع</button></div>
     `;
@@ -433,7 +438,7 @@ function renderSessionDetails(teacher, sessionIdx) {
         // نحاول توليد data-URL أولاً، وإن فشل نحاول تحميل المكتبة (أو استخدامها إذا تمت بالفعل)
         generateQRDataURL(studentUrl, (dataURL) => {
             if (dataURL) {
-                qrEl.innerHTML = `<img src="${dataURL}" style="max-width:160px; border-radius:6px;">`;
+                qrEl.innerHTML = `<img src="${dataURL}" style="max-width:300px; border-radius:6px;">`;
                 const img = document.getElementById('qrcodeImg');
                 if (img) img.src = dataURL;
                 return;
@@ -445,7 +450,12 @@ function renderSessionDetails(teacher, sessionIdx) {
                     return;
                 }
                 try {
-                    new window.QRCode(qrEl, { text: studentUrl, width: 160, height: 160 });
+                    new window.QRCode(qrEl, { 
+                        text: studentUrl, 
+                        width: 300, 
+                        height: 300,
+                        correctLevel: window.QRCode.CorrectLevel ? window.QRCode.CorrectLevel.H : 2
+                    });
                     setTimeout(()=>{
                         const canvas = qrEl.querySelector('canvas');
                         const img = document.getElementById('qrcodeImg');
