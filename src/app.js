@@ -603,111 +603,163 @@ function renderSessionInfo(phone, sessionIdx) {
 // عرض نتائج الطلاب للدكتور
 function renderSessionResults(teacher, sessionIdx) {
     const session = teacher.sessions[sessionIdx];
-    const key = `answers_${teacher.phone}_${sessionIdx}`;
-    const answers = JSON.parse(localStorage.getItem(key) || '[]');
     
-    let html = `
-        <div class="title">📊 نتائج الطلاب</div>
-        <div class="card" style="margin-bottom:16px; background:#f0fdf4; border:1px solid #86efac;">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <div>
-                    <div style="font-weight:bold; font-size:1.1rem;">${session.subject}</div>
-                    <div class="muted">${session.date}</div>
-                </div>
-                <div style="text-align:center;">
-                    <div style="font-size:2rem; font-weight:bold; color:#10b981;">${answers.length}</div>
-                    <div style="font-size:0.9rem; color:#666;">طالب أنهى</div>
-                </div>
-            </div>
+    // عرض رسالة تحميل
+    app.innerHTML = `
+        <div style="text-align:center; padding:40px;">
+            <div class="loading-spinner" style="width:50px; height:50px; border:4px solid #e5e7eb; border-top-color:#3b82f6; border-radius:50%; animation:spin 1s linear infinite; margin:0 auto;"></div>
+            <div style="margin-top:20px; color:#666;">جاري تحميل النتائج...</div>
         </div>
+        <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
     `;
     
-    if (!answers.length) {
-        html += '<div class="panel" style="text-align:center; padding:30px; color:#666;">📭 لا توجد إجابات بعد. انتظر حتى ينتهي الطلاب من الاختبار.</div>';
-    } else {
-        html += `
-        <div style="overflow-x:auto;">
-            <table style="width:100%; border-collapse:collapse; font-size:0.95rem;">
-                <thead>
-                    <tr style="background:#f8fafc;">
-                        <th style="padding:12px; text-align:right; border-bottom:2px solid #e2e8f0;">#</th>
-                        <th style="padding:12px; text-align:right; border-bottom:2px solid #e2e8f0;">الاسم</th>
-                        <th style="padding:12px; text-align:right; border-bottom:2px solid #e2e8f0;">السجل</th>
-                        <th style="padding:12px; text-align:center; border-bottom:2px solid #e2e8f0;">الدرجة</th>
-                        <th style="padding:12px; text-align:center; border-bottom:2px solid #e2e8f0;">النسبة</th>
-                        <th style="padding:12px; text-align:center; border-bottom:2px solid #e2e8f0;">تفاصيل</th>
-                    </tr>
-                </thead>
-                <tbody>`;
+    // قراءة الإجابات من JSONBin (نفس bin الجلسة)
+    const sessionBinId = getSessionBinId(teacher.phone, sessionIdx);
+    const headers = {};
+    if (JSONBIN_API_KEY) headers['X-Master-Key'] = JSONBIN_API_KEY;
+    
+    function showResults(answers) {
+        let html = `
+            <div class="title">📊 نتائج الطلاب</div>
+            <div class="card" style="margin-bottom:16px; background:#f0fdf4; border:1px solid #86efac;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div>
+                        <div style="font-weight:bold; font-size:1.1rem;">${session.subject}</div>
+                        <div class="muted">${session.date}</div>
+                    </div>
+                    <div style="text-align:center;">
+                        <div style="font-size:2rem; font-weight:bold; color:#10b981;">${answers.length}</div>
+                        <div style="font-size:0.9rem; color:#666;">طالب أنهى</div>
+                    </div>
+                </div>
+            </div>
+            <button id="refreshBtn" style="width:100%; padding:12px; margin-bottom:16px; background:#e0f2fe; color:#0369a1; border:none; border-radius:8px; cursor:pointer; font-size:1rem;">
+                🔄 تحديث النتائج
+            </button>
+        `;
         
-        answers.forEach((a, i) => {
-            const score = a.score !== undefined ? a.score : calcStudentScore(session, a.answers);
-            const total = session.questions.length;
-            const percentage = Math.round((score / total) * 100);
-            const passed = percentage >= 50;
-            const statusColor = passed ? '#10b981' : '#ef4444';
-            const statusBg = passed ? '#f0fdf4' : '#fef2f2';
+        if (!answers.length) {
+            html += '<div class="panel" style="text-align:center; padding:30px; color:#666;">📭 لا توجد إجابات بعد. انتظر حتى ينتهي الطلاب من الاختبار.</div>';
+        } else {
+            html += `
+            <div style="overflow-x:auto;">
+                <table style="width:100%; border-collapse:collapse; font-size:0.95rem;">
+                    <thead>
+                        <tr style="background:#f8fafc;">
+                            <th style="padding:12px; text-align:right; border-bottom:2px solid #e2e8f0;">#</th>
+                            <th style="padding:12px; text-align:right; border-bottom:2px solid #e2e8f0;">الاسم</th>
+                            <th style="padding:12px; text-align:right; border-bottom:2px solid #e2e8f0;">السجل</th>
+                            <th style="padding:12px; text-align:center; border-bottom:2px solid #e2e8f0;">الدرجة</th>
+                            <th style="padding:12px; text-align:center; border-bottom:2px solid #e2e8f0;">النسبة</th>
+                            <th style="padding:12px; text-align:center; border-bottom:2px solid #e2e8f0;">تفاصيل</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+            
+            answers.forEach((a, i) => {
+                const score = a.score !== undefined ? a.score : calcStudentScore(session, a.answers);
+                const total = session.questions.length;
+                const percentage = Math.round((score / total) * 100);
+                const passed = percentage >= 50;
+                const statusColor = passed ? '#10b981' : '#ef4444';
+                const statusBg = passed ? '#f0fdf4' : '#fef2f2';
+                
+                html += `
+                    <tr style="border-bottom:1px solid #f1f5f9;">
+                        <td style="padding:12px; font-weight:bold; color:#64748b;">${i + 1}</td>
+                        <td style="padding:12px; font-weight:500;">${a.studentName}</td>
+                        <td style="padding:12px; color:#64748b;">${a.studentId}</td>
+                        <td style="padding:12px; text-align:center;">
+                            <span style="font-weight:bold; color:${statusColor};">${score}</span>
+                            <span style="color:#94a3b8;">/ ${total}</span>
+                        </td>
+                        <td style="padding:12px; text-align:center;">
+                            <span style="background:${statusBg}; color:${statusColor}; padding:4px 10px; border-radius:20px; font-weight:bold; font-size:0.9rem;">
+                                ${percentage}%
+                            </span>
+                        </td>
+                        <td style="padding:12px; text-align:center;">
+                            <button onclick='window.showStudentDetails("${teacher.phone}",${sessionIdx},${i})' style="padding:6px 14px; border:none; background:#3b82f6; color:white; border-radius:6px; cursor:pointer; font-size:0.85rem;">
+                                👁️ عرض
+                            </button>
+                        </td>
+                    </tr>`;
+            });
+            
+            html += `</tbody></table></div>`;
+            
+            // إحصائيات
+            const totalStudents = answers.length;
+            const passedCount = answers.filter(a => {
+                const score = a.score !== undefined ? a.score : calcStudentScore(session, a.answers);
+                return (score / session.questions.length) >= 0.5;
+            }).length;
+            const avgScore = answers.reduce((sum, a) => {
+                return sum + (a.score !== undefined ? a.score : calcStudentScore(session, a.answers));
+            }, 0) / totalStudents;
             
             html += `
-                <tr style="border-bottom:1px solid #f1f5f9;">
-                    <td style="padding:12px; font-weight:bold; color:#64748b;">${i + 1}</td>
-                    <td style="padding:12px; font-weight:500;">${a.studentName}</td>
-                    <td style="padding:12px; color:#64748b;">${a.studentId}</td>
-                    <td style="padding:12px; text-align:center;">
-                        <span style="font-weight:bold; color:${statusColor};">${score}</span>
-                        <span style="color:#94a3b8;">/ ${total}</span>
-                    </td>
-                    <td style="padding:12px; text-align:center;">
-                        <span style="background:${statusBg}; color:${statusColor}; padding:4px 10px; border-radius:20px; font-weight:bold; font-size:0.9rem;">
-                            ${percentage}%
-                        </span>
-                    </td>
-                    <td style="padding:12px; text-align:center;">
-                        <button onclick='window.showStudentDetails("${teacher.phone}",${sessionIdx},${i})' style="padding:6px 14px; border:none; background:#3b82f6; color:white; border-radius:6px; cursor:pointer; font-size:0.85rem;">
-                            👁️ عرض
-                        </button>
-                    </td>
-                </tr>`;
-        });
-        
-        html += `</tbody></table></div>`;
-        
-        // إحصائيات
-        const totalStudents = answers.length;
-        const passedCount = answers.filter(a => {
-            const score = a.score !== undefined ? a.score : calcStudentScore(session, a.answers);
-            return (score / session.questions.length) >= 0.5;
-        }).length;
-        const avgScore = answers.reduce((sum, a) => {
-            return sum + (a.score !== undefined ? a.score : calcStudentScore(session, a.answers));
-        }, 0) / totalStudents;
-        
-        html += `
-        <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:12px; margin-top:20px;">
-            <div class="card" style="text-align:center; background:#f0f9ff;">
-                <div style="font-size:1.5rem; font-weight:bold; color:#0369a1;">${totalStudents}</div>
-                <div style="font-size:0.85rem; color:#666;">إجمالي الطلاب</div>
+            <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:12px; margin-top:20px;">
+                <div class="card" style="text-align:center; background:#f0f9ff;">
+                    <div style="font-size:1.5rem; font-weight:bold; color:#0369a1;">${totalStudents}</div>
+                    <div style="font-size:0.85rem; color:#666;">إجمالي الطلاب</div>
+                </div>
+                <div class="card" style="text-align:center; background:#f0fdf4;">
+                    <div style="font-size:1.5rem; font-weight:bold; color:#10b981;">${passedCount}</div>
+                    <div style="font-size:0.85rem; color:#666;">ناجح</div>
+                </div>
+                <div class="card" style="text-align:center; background:#fef2f2;">
+                    <div style="font-size:1.5rem; font-weight:bold; color:#ef4444;">${totalStudents - passedCount}</div>
+                    <div style="font-size:0.85rem; color:#666;">راسب</div>
+                </div>
             </div>
-            <div class="card" style="text-align:center; background:#f0fdf4;">
-                <div style="font-size:1.5rem; font-weight:bold; color:#10b981;">${passedCount}</div>
-                <div style="font-size:0.85rem; color:#666;">ناجح</div>
-            </div>
-            <div class="card" style="text-align:center; background:#fef2f2;">
-                <div style="font-size:1.5rem; font-weight:bold; color:#ef4444;">${totalStudents - passedCount}</div>
-                <div style="font-size:0.85rem; color:#666;">راسب</div>
-            </div>
-        </div>
-        `;
+            `;
+        }
+        
+        // حفظ الإجابات محلياً لعرض التفاصيل
+        localStorage.setItem(`answers_${teacher.phone}_${sessionIdx}`, JSON.stringify(answers));
+        
+        html += `<div class="button-row" style="justify-content:center; margin-top:20px;"><button id="backBtn" class="btn-ghost">⬅️ رجوع</button></div>`;
+        app.innerHTML = html;
+        
+        window.showStudentDetails = (phone, sIdx, aIdx) => {
+            const t = JSON.parse(localStorage.getItem('teacher_' + phone));
+            const ans = JSON.parse(localStorage.getItem(`answers_${phone}_${sIdx}`) || '[]');
+            renderStudentDetails(t, sIdx, ans[aIdx]);
+        };
+        document.getElementById('backBtn').onclick = () => renderTeacherHome(teacher);
+        document.getElementById('refreshBtn').onclick = () => renderSessionResults(teacher, sessionIdx);
     }
     
-    html += `<div class="button-row" style="justify-content:center; margin-top:20px;"><button id="backBtn" class="btn-ghost">⬅️ رجوع</button></div>`;
-    app.innerHTML = html;
-    window.showStudentDetails = (phone, sIdx, aIdx) => {
-        const t = JSON.parse(localStorage.getItem('teacher_' + phone));
-        const ans = JSON.parse(localStorage.getItem(`answers_${phone}_${sIdx}`) || '[]');
-        renderStudentDetails(t, sIdx, ans[aIdx]);
-    };
-    document.getElementById('backBtn').onclick = () => renderTeacherHome(teacher);
+    // محاولة القراءة من JSONBin أولاً (نفس bin الجلسة)
+    if (sessionBinId) {
+        fetch(`${JSONBIN_BASE}/b/${sessionBinId}/latest`, { headers })
+            .then(r => r.ok ? r.json() : null)
+            .then(json => {
+                if (json && json.record && json.record.answers) {
+                    console.log('📥 تم قراءة الإجابات من السيرفر:', json.record.answers.length);
+                    showResults(json.record.answers);
+                } else {
+                    // fallback للـ localStorage
+                    console.log('⚠️ لا توجد إجابات في السيرفر - قراءة محلية');
+                    const key = `answers_${teacher.phone}_${sessionIdx}`;
+                    const localAnswers = JSON.parse(localStorage.getItem(key) || '[]');
+                    showResults(localAnswers);
+                }
+            })
+            .catch(err => {
+                console.error('خطأ في قراءة الإجابات:', err);
+                const key = `answers_${teacher.phone}_${sessionIdx}`;
+                const localAnswers = JSON.parse(localStorage.getItem(key) || '[]');
+                showResults(localAnswers);
+            });
+    } else {
+        // لا يوجد bin - قراءة من localStorage
+        console.log('⚠️ لا يوجد session bin - قراءة محلية');
+        const key = `answers_${teacher.phone}_${sessionIdx}`;
+        const localAnswers = JSON.parse(localStorage.getItem(key) || '[]');
+        showResults(localAnswers);
+    }
 }
 
 function calcStudentScore(session, answers) {
@@ -1177,30 +1229,64 @@ function renderStudentExam(teacherPhone, sessionIdx, studentName, studentId) {
 }
 
 function renderStudentFinish(teacherPhone, sessionIdx, studentName, studentId, answers) {
-    // حفظ الإجابات في LocalStorage للدكتور
-    const key = `answers_${teacherPhone}_${sessionIdx}`;
-    let all = JSON.parse(localStorage.getItem(key) || '[]');
-    
     // حساب الدرجة لحفظها مع الإجابة
     const teacher = JSON.parse(localStorage.getItem('teacher_' + teacherPhone));
-    const session = teacher.sessions[sessionIdx];
+    const session = teacher ? teacher.sessions[sessionIdx] : null;
     let correct = 0;
-    answers.forEach(a => {
-        const q = session.questions[a.qIdx];
-        if (q && String(a.ans).trim().toLowerCase() === String(q.correct).trim().toLowerCase()) {
-            correct++;
-        }
-    });
+    let total = 0;
+    if (session) {
+        total = session.questions.length;
+        answers.forEach(a => {
+            const q = session.questions[a.qIdx];
+            if (q && String(a.ans).trim().toLowerCase() === String(q.correct).trim().toLowerCase()) {
+                correct++;
+            }
+        });
+    }
     
-    all.push({
+    const answerData = {
         studentName, 
         studentId, 
         answers, 
         score: correct,
-        total: session.questions.length,
+        total: total,
         time: new Date().toISOString()
-    });
+    };
+    
+    // حفظ محلياً
+    const key = `answers_${teacherPhone}_${sessionIdx}`;
+    let all = JSON.parse(localStorage.getItem(key) || '[]');
+    all.push(answerData);
     localStorage.setItem(key, JSON.stringify(all));
+    
+    // إرسال للسيرفر (JSONBin) للمزامنة مع الدكتور
+    // نستخدم نفس bin الجلسة لحفظ الإجابات
+    const sessionBinId = getSessionBinId(teacherPhone, sessionIdx);
+    const headers = { 'Content-Type': 'application/json' };
+    if (JSONBIN_API_KEY) headers['X-Master-Key'] = JSONBIN_API_KEY;
+    
+    if (sessionBinId) {
+        // قراءة حالة الجلسة ثم إضافة الإجابة
+        fetch(`${JSONBIN_BASE}/b/${sessionBinId}/latest`, { headers })
+            .then(r => r.ok ? r.json() : { record: {} })
+            .then(json => {
+                const record = json.record || {};
+                const existingAnswers = record.answers || [];
+                existingAnswers.push(answerData);
+                record.answers = existingAnswers;
+                record.updatedAt = Date.now();
+                
+                return fetch(`${JSONBIN_BASE}/b/${sessionBinId}`, {
+                    method: 'PUT',
+                    headers,
+                    body: JSON.stringify(record)
+                });
+            })
+            .then(() => console.log('✅ تم حفظ الإجابة في السيرفر'))
+            .catch(err => console.error('❌ خطأ في حفظ الإجابة:', err));
+    } else {
+        console.warn('⚠️ لا يوجد session bin - الإجابة محفوظة محلياً فقط');
+    }
     
     // حفظ أن الطالب أنهى الاختبار
     const finishedKey = `finished_${teacherPhone}_${sessionIdx}_${studentId}`;
