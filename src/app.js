@@ -11,15 +11,11 @@ function decodePayload(str) {
 // دالة مساعدة لبناء رابط الطالب متوافقة مع file:// و http(s)، مع تضمين بيانات الجلسة
 function getStudentUrl(phone, idx) {
     const base = location.href.split('?')[0].split('#')[0];
-    const teacher = JSON.parse(localStorage.getItem('teacher_' + phone) || 'null');
-    const sessionData = teacher && teacher.sessions ? teacher.sessions[idx] : null;
     const binId = getSessionBinId(phone, idx);
-    // نضمّن snapshot للعمل المحلي + binId للمزامنة الفورية
-    const payload = (teacher && sessionData) ? encodePayload({ teacher: { name: teacher.name, phone: teacher.phone }, sessionIdx: idx, session: sessionData }) : '';
     const sep = base.includes('?') ? '&' : '?';
-    const dataPart = payload ? `&data=${payload}` : '';
+    // رابط قصير: فقط session و bin (بدون data المضمنة)
     const binPart = binId ? `&bin=${binId}` : '';
-    return `${base}${sep}session=${phone}_${idx}${dataPart}${binPart}`;
+    return `${base}${sep}session=${phone}_${idx}${binPart}`;
 }
 
 // --- تكامل مع JSONBin.io للمزامنة الفورية (مجاني تماماً) ---
@@ -812,7 +808,8 @@ function renderStudentEntry(teacherPhone, sessionIdx) {
     const savedStudentId = sessionStorage.getItem('studentId');
     if (savedStudentId) {
         const examStartedKey = `exam_started_${teacherPhone}_${sessionIdx}_${savedStudentId}`;
-        if (sessionStorage.getItem(examStartedKey)) {
+        const kickKey = `kicked_${teacherPhone}_${sessionIdx}_${savedStudentId}`;
+        if (localStorage.getItem(examStartedKey) || localStorage.getItem(kickKey)) {
             app.innerHTML = `
                 <div class="title">لقد بدأت الاختبار من قبل</div>
                 <div style="color:#d32f2f; margin-top:12px;">عذراً، لا يمكنك إعادة الدخول بعد بدء الاختبار.</div>
@@ -923,9 +920,22 @@ function renderStudentExam(teacherPhone, sessionIdx, studentName, studentId) {
     const teacher = JSON.parse(localStorage.getItem('teacher_' + teacherPhone));
     const session = teacher.sessions[sessionIdx];
     
+    // فحص إذا كان الطالب مطرود من قبل
+    const kickKey = `kicked_${teacherPhone}_${sessionIdx}_${studentId}`;
+    const kickData = localStorage.getItem(kickKey);
+    if (kickData) {
+        const kick = JSON.parse(kickData);
+        app.innerHTML = `
+            <div class="title">تم إخراجك من الاختبار سابقاً</div>
+            <div style='color:#d32f2f; margin-top:12px;'>${kick.reason}</div>
+            <div style='margin-top:12px; color:#666;'>لا يمكنك إعادة الدخول للاختبار.</div>
+        `;
+        return;
+    }
+    
     // حفظ أن الطالب بدأ الاختبار (لمنع إعادة الدخول)
     const examStartedKey = `exam_started_${teacherPhone}_${sessionIdx}_${studentId}`;
-    sessionStorage.setItem(examStartedKey, 'true');
+    localStorage.setItem(examStartedKey, 'true');
     
     // حفظ أو استرجاع ترتيب الأسئلة المخلوطة
     const shuffleKey = `shuffled_${teacherPhone}_${sessionIdx}_${studentId}`;
@@ -982,7 +992,21 @@ function renderStudentExam(teacherPhone, sessionIdx, studentName, studentId) {
             }
         };
         // منع الرجوع
-        window.onpopstate = () => { location.reload(); };
+        window.onpopstate = () => { kick('تم اكتشاف محاولة غش (الرجوع للخلف)'); };
+        // منع F5 و Ctrl+R
+        document.onkeydown = (e) => {
+            if (e.key === 'F5' || (e.ctrlKey && e.key === 'r')) {
+                e.preventDefault();
+                kick('تم اكتشاف محاولة غش (إعادة تحميل الصفحة)');
+                return false;
+            }
+            // منع فتح Developer Tools
+            if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'C'))) {
+                e.preventDefault();
+                kick('تم اكتشاف محاولة غش (فتح أدوات المطور)');
+                return false;
+            }
+        };
         // حماية ضد الغش
         window.onblur = () => { if (!kicked) kick('تم اكتشاف محاولة غش (الخروج من الصفحة)'); };
         window.onfocus = () => {};
@@ -1049,8 +1073,7 @@ function renderStudentFinish(teacherPhone, sessionIdx, studentName, studentId, a
         <div style="text-align:center; margin-top:20px; color:#666;">شكراً لمشاركتك!</div>
     `;
     
-    // مسح بيانات الجلسة لمنع إعادة الدخول
-    sessionStorage.clear();
+    // لا نمسح sessionStorage - نبقي على الحماية
 }
 
 // دالة خلط مصفوفة
