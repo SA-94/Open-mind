@@ -501,15 +501,11 @@ function renderSessionDetails(teacher, sessionIdx) {
             });
         });
     }
-    // نستخدم showQR مباشرة (generateQRDataURL سيحاول تحميل المكتبة إذا كانت مفقودة)
-    showQR();
+    
+    document.getElementById('showQrBtn').onclick = showQR;
     document.getElementById('copyUrlBtn').onclick = () => {
         navigator.clipboard.writeText(studentUrl);
         alert('تم نسخ الرابط!');
-    };
-    // زر لفتح واجهة الطالب في نافذة جديدة
-    document.getElementById('openStudentBtn').onclick = () => {
-        window.open(studentUrl, '_blank');
     };
     // زر لحفظ صورة الباركود - ننتظر أن يتواجد الكانفس بعد التوليد
     document.getElementById('downloadQrBtn').onclick = () => {
