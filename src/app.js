@@ -303,78 +303,47 @@ function renderSessionsList(teacher) {
         const studentUrl = getStudentUrl(phone, idx);
         // توليد QR كصورة data URL أولاً
         generateQRDataURL(studentUrl, (qrDataURL) => {
-            const win = window.open('', '_blank', 'width=900,height=700');
-            const qrHtml = qrDataURL ? `<img src="${qrDataURL}" alt="QR Code" style="max-width:200px; border:2px solid #ddd; border-radius:8px;">` : '<div style="color:#d32f2f;">فشل توليد الباركود</div>';
+            const win = window.open('', '_blank', 'width=500,height=600');
+            const qrHtml = qrDataURL ? `<img src="${qrDataURL}" alt="QR Code" style="max-width:400px; border:2px solid #ddd; border-radius:12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">` : '<div style="color:#d32f2f; padding:20px;">فشل توليد الباركود</div>';
             const html = `<!doctype html>
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>تفاصيل الجلسة - ${s.subject}</title>
+<title>باركود الجلسة - ${s.subject}</title>
 <style>
-body{font-family: 'Tajawal', Arial, sans-serif;background:linear-gradient(180deg,#f6f8fb 0%, #ffffff 100%);margin:0;padding:0;direction:rtl}
-#app{max-width:520px;margin:40px auto;background:#fff;border-radius:12px;box-shadow:0 6px 24px rgba(15,23,42,0.06);padding:36px 28px}
-input{font-size:1rem;padding:10px;margin:8px 0;border-radius:6px;border:1px solid #ddd;width:100%;box-sizing:border-box}
-button{font-size:1rem;padding:10px 14px;margin:8px 4px;border-radius:8px;border:0;background:#3b82f6;color:#fff;cursor:pointer;transition:background .15s;display:inline-block;width:auto}
-button:hover{background:#2563eb}
-.btn-secondary{background:#eef2f5;color:#333}
-.btn-success{background:#4caf50}
-.btn-start{background:linear-gradient(90deg,#10b981,#059669);box-shadow:0 4px 12px rgba(6,95,70,0.12)}
-.waiting-box{background:#fff7ed;padding:12px;border-radius:8px;color:#78350f;border:1px solid #ffe4bf;margin-top:10px}
-.card{background:#f3f6ff;padding:14px 16px;border-radius:10px;margin-bottom:12px}
-.session-btn{display:inline-block;min-width:160px}
-.session-actions{display:flex;gap:10px;justify-content:center;margin-top:8px}
-.qr-box{background:#fff;padding:12px;border-radius:12px;box-shadow:0 2px 8px #e3e8f0}
-.button-row{display:flex;justify-content:space-between;gap:12px;width:100%;box-sizing:border-box;margin-top:10px}
-.btn-left{margin-left:auto}
-.btn-right{margin-right:auto}
-.title{font-size:1.4rem;font-weight:bold;margin-bottom:18px;color:#222;text-align:center}
-img{max-width:100%}
+body{font-family: 'Tajawal', Arial, sans-serif;background:linear-gradient(135deg,#667eea 0%, #764ba2 100%);margin:0;padding:20px;direction:rtl;display:flex;align-items:center;justify-content:center;min-height:100vh}
+.container{background:#fff;border-radius:16px;box-shadow:0 10px 40px rgba(0,0,0,0.3);padding:40px;text-align:center;max-width:450px}
+h2{color:#333;margin-bottom:10px;font-size:1.5rem}
+.subject{color:#666;margin-bottom:30px;font-size:1.1rem}
+button{font-size:1rem;padding:12px 24px;margin:20px 8px 0;border-radius:8px;border:0;background:#3b82f6;color:#fff;cursor:pointer;transition:all .2s;box-shadow:0 2px 8px rgba(59,130,246,0.3)}
+button:hover{background:#2563eb;transform:translateY(-2px);box-shadow:0 4px 12px rgba(59,130,246,0.4)}
+.btn-download{background:#10b981}
+.btn-download:hover{background:#059669}
+.btn-close{background:#6b7280}
+.btn-close:hover{background:#4b5563}
+img{max-width:100%;height:auto}
 </style>
 </head>
 <body>
-    <div style="max-width:760px;margin:20px auto;padding:20px;">
-        <h2 style="text-align:center;">تفاصيل الجلسة</h2>
-        <div style="margin:10px 0;"><b>المادة:</b> ${s.subject}</div>
-        <div style="margin:6px 0;"><b>التاريخ:</b> ${s.date}</div>
-        <div style="margin:12px 0; text-align:center;">${qrHtml}</div>
-        <div style="margin:12px 0; text-align:center;">
-            <div>رابط الطالب:</div>
-            <div style="margin-top:8px;">
-                <button id="openStudentLink" class="session-btn">فتح رابط الطالب</button>
-                <button id="copyStudentLink" class="session-btn">نسخ الرابط</button>
-            </div>
-        </div>
-        <div style="margin:12px 0; text-align:center;">
-            <div>صورة الباركود:</div>
-            <div style="margin-top:8px;">
-                ${qrDataURL ? `<button id="openQrImg" class="session-btn">فتح صورة الباركود</button><button id="copyQrLink" class="session-btn">نسخ رابط الصورة</button>` : `<div style="color:#d32f2f; margin-top:6px;">لا توجد صورة الباركود</div>`}
-            </div>
-        </div>
-        <div style="margin-top:18px;">
-            <h3>الأسئلة</h3>
-            <ol>${s.questions.map(q=>`<li style="margin-bottom:8px;"><b>${q.type}</b>: ${q.text}${q.type==='اختيارات'?`<ul style="margin-top:6px;">${q.options.map(o=>`<li>${o}</li>`).join('')}</ul>`:''}</li>`).join('')}</ol>
-        </div>
-        <div style="text-align:center; margin-top:16px;"><button id="closeBtn" class="btn-secondary">إغلاق</button></div>
+    <div class="container">
+        <h2>📱 باركود الجلسة</h2>
+        <div class="subject">${s.subject}</div>
+        <div style="margin:20px 0;">${qrHtml}</div>
+        ${qrDataURL ? `<button id="downloadBtn" class="btn-download">💾 تحميل الباركود</button>` : ''}
+        <button id="closeBtn" class="btn-close">✖ إغلاق</button>
     </div>
     <script>
         document.getElementById('closeBtn').onclick = ()=> window.close();
-        // ربط أزرار فتح ونسخ الروابط
-        (function(){
-            const studentUrl = ${JSON.stringify(studentUrl)};
-            try{
-                const openBtn = document.getElementById('openStudentLink');
-                const copyBtn = document.getElementById('copyStudentLink');
-                if (openBtn) openBtn.onclick = ()=> window.open(studentUrl, '_blank');
-                if (copyBtn) copyBtn.onclick = ()=> { navigator.clipboard && navigator.clipboard.writeText(studentUrl); alert('نسخ رابط الطالب'); };
-            } catch(e){ /* ignore */ }
-            try{
-                const openQr = document.getElementById('openQrImg');
-                const copyQr = document.getElementById('copyQrLink');
-                if (openQr) openQr.onclick = ()=> { window.open(${JSON.stringify(qrDataURL)}, '_blank'); };
-                if (copyQr) copyQr.onclick = ()=> { navigator.clipboard && navigator.clipboard.writeText(${JSON.stringify(qrDataURL)}); alert('نسخ رابط صورة الباركود'); };
-            } catch(e){ /* ignore */ }
-        })();
+        const downloadBtn = document.getElementById('downloadBtn');
+        if (downloadBtn) {
+            downloadBtn.onclick = ()=> {
+                const a = document.createElement('a');
+                a.href = ${JSON.stringify(qrDataURL)};
+                a.download = '${s.subject.replace(/[^a-zA-Z0-9\u0600-\u06FF]/g, '_')}_qr.png';
+                a.click();
+            };
+        }
     </script>
 </body>
 </html>`;
