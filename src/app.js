@@ -464,7 +464,17 @@ function renderSessionDetails(teacher, sessionIdx) {
         });
     }
     
-    document.getElementById('showQrBtn').onclick = showQR;
+    document.getElementById('showQrBtn').onclick = () => {
+        const qrContainer = document.getElementById('qrContainer');
+        const showBtn = document.getElementById('showQrBtn');
+        if (qrContainer.style.display === 'none' || !qrContainer.style.display) {
+            showQR();
+            showBtn.textContent = 'إخفاء الباركود';
+        } else {
+            qrContainer.style.display = 'none';
+            showBtn.textContent = 'عرض الباركود';
+        }
+    };
     document.getElementById('copyUrlBtn').onclick = () => {
         navigator.clipboard.writeText(studentUrl);
         alert('تم نسخ الرابط!');
@@ -569,7 +579,7 @@ function renderSessionInfo(phone, sessionIdx) {
         </div>
         <div class="button-row" style="justify-content:center; margin-top:12px;"><button id="backBtn" class="btn-ghost">رجوع</button></div>
     `;
-    document.getElementById('openQrBtn').onclick = () => window.openSessionWindow && window.openSessionWindow(phone, sessionIdx);
+    document.getElementById('openQrBtn').onclick = () => renderSessionDetails(t, sessionIdx);
     document.getElementById('startExamBtn').onclick = () => {
         session.started = !session.started;
         t.sessions[sessionIdx] = session;
