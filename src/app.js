@@ -797,6 +797,20 @@ function handleAddQ(teacher, session) {
 // --- صفحة الطالب ---
 function renderStudentEntry(teacherPhone, sessionIdx) {
     const session = JSON.parse(localStorage.getItem('teacher_' + teacherPhone)).sessions[sessionIdx];
+    
+    // فحص إذا كان الطالب بدأ الاختبار من قبل (منع إعادة الدخول)
+    const savedStudentId = sessionStorage.getItem('studentId');
+    if (savedStudentId) {
+        const examStartedKey = `exam_started_${teacherPhone}_${sessionIdx}_${savedStudentId}`;
+        if (sessionStorage.getItem(examStartedKey)) {
+            app.innerHTML = `
+                <div class="title">لقد بدأت الاختبار من قبل</div>
+                <div style="color:#d32f2f; margin-top:12px;">عذراً، لا يمكنك إعادة الدخول بعد بدء الاختبار.</div>
+            `;
+            return;
+        }
+    }
+    
     app.innerHTML = `
         <div class="title">دخول الطالب للاختبار</div>
         <div class="subtitle">أدخل بياناتك ثم انتظر بدء الاختبار من الدكتور.</div>
@@ -898,8 +912,23 @@ function renderStudentWaiting(teacherPhone, sessionIdx, name, id) {
 function renderStudentExam(teacherPhone, sessionIdx, studentName, studentId) {
     const teacher = JSON.parse(localStorage.getItem('teacher_' + teacherPhone));
     const session = teacher.sessions[sessionIdx];
-    let questions = session.questions.map((q, i) => ({...q, idx: i}));
-    questions = shuffleArray(questions);
+    
+    // حفظ أن الطالب بدأ الاختبار (لمنع إعادة الدخول)
+    const examStartedKey = `exam_started_${teacherPhone}_${sessionIdx}_${studentId}`;
+    sessionStorage.setItem(examStartedKey, 'true');
+    
+    // حفظ أو استرجاع ترتيب الأسئلة المخلوطة
+    const shuffleKey = `shuffled_${teacherPhone}_${sessionIdx}_${studentId}`;
+    let questions;
+    const savedShuffle = sessionStorage.getItem(shuffleKey);
+    if (savedShuffle) {
+        questions = JSON.parse(savedShuffle);
+    } else {
+        questions = session.questions.map((q, i) => ({...q, idx: i}));
+        questions = shuffleArray(questions);
+        sessionStorage.setItem(shuffleKey, JSON.stringify(questions));
+    }
+    
     let current = 0;
     let answers = [];
     let kicked = false;
@@ -964,12 +993,54 @@ function renderStudentExam(teacherPhone, sessionIdx, studentName, studentId) {
 }
 
 function renderStudentFinish(teacherPhone, sessionIdx, studentName, studentId, answers) {
-    // حفظ الإجابات في LocalStorage (يمكن تطويرها لاحقاً)
+    // حفظ الإجابات في LocalStorage
     const key = `answers_${teacherPhone}_${sessionIdx}`;
     let all = JSON.parse(localStorage.getItem(key) || '[]');
     all.push({studentName, studentId, answers, time: new Date().toISOString()});
     localStorage.setItem(key, JSON.stringify(all));
-    app.innerHTML = `<div class="title">تم إرسال إجاباتك بنجاح</div><div>شكرًا لمشاركتك!</div>`;
+    
+    // حساب الدرجة
+    const teacher = JSON.parse(localStorage.getItem('teacher_' + teacherPhone));
+    const session = teacher.sessions[sessionIdx];
+    let correct = 0;
+    let resultHtml = '';
+    
+    answers.forEach((a, i) => {
+        const q = session.questions[a.qIdx];
+        const isCorrect = String(a.ans).trim().toLowerCase() === String(q.correct).trim().toLowerCase();
+        if (isCorrect) correct++;
+        
+        const icon = isCorrect ? '✅' : '❌';
+        const color = isCorrect ? '#4caf50' : '#d32f2f';
+        resultHtml += `
+            <div class="card" style="border-right: 4px solid ${color}; margin-bottom: 12px;">
+                <div style="font-weight: bold; margin-bottom: 6px;">${icon} سؤال ${i+1}: ${q.text}</div>
+                <div>• إجابتك: <span style="color:${color};font-weight:bold;">${a.ans}</span></div>
+                ${!isCorrect ? `<div>• الإجابة الصحيحة: <span style="color:#4caf50;font-weight:bold;">${q.correct}</span></div>` : ''}
+            </div>
+        `;
+    });
+    
+    const percentage = Math.round((correct / answers.length) * 100);
+    const grade = percentage >= 50 ? '🎉 ناجح' : '😞 راسب';
+    const gradeColor = percentage >= 50 ? '#4caf50' : '#d32f2f';
+    
+    app.innerHTML = `
+        <div class="title">تم إرسال إجاباتك بنجاح</div>
+        <div class="card" style="text-align:center; background: linear-gradient(135deg, ${gradeColor}22, ${gradeColor}11); border: 2px solid ${gradeColor};">
+            <h2 style="color:${gradeColor}; margin: 8px 0;">${grade}</h2>
+            <div style="font-size: 18px; font-weight: bold;">درجتك: ${correct} من ${answers.length}</div>
+            <div style="font-size: 16px; color: #666;">${percentage}%</div>
+        </div>
+        <div style="margin-top: 20px;">
+            <h3>تفاصيل الإجابات:</h3>
+            ${resultHtml}
+        </div>
+        <div style="text-align:center; margin-top:20px; color:#666;">شكراً لمشاركتك!</div>
+    `;
+    
+    // مسح بيانات الجلسة لمنع إعادة الدخول
+    sessionStorage.clear();
 }
 
 // دالة خلط مصفوفة
