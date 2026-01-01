@@ -600,29 +600,107 @@ function renderSessionInfo(phone, sessionIdx) {
     document.getElementById('backBtn').onclick = () => renderTeacherHome(t);
 }
 
-// عرض نتائج الطلاب
+// عرض نتائج الطلاب للدكتور
 function renderSessionResults(teacher, sessionIdx) {
     const session = teacher.sessions[sessionIdx];
     const key = `answers_${teacher.phone}_${sessionIdx}`;
     const answers = JSON.parse(localStorage.getItem(key) || '[]');
-    let html = `<div class=\"title\">نتائج الطلاب</div><div class=\"subtitle\">تفاصيل الدرجات لكل طالب في هذه الجلسة.</div>`;
+    
+    let html = `
+        <div class="title">📊 نتائج الطلاب</div>
+        <div class="card" style="margin-bottom:16px; background:#f0fdf4; border:1px solid #86efac;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <div style="font-weight:bold; font-size:1.1rem;">${session.subject}</div>
+                    <div class="muted">${session.date}</div>
+                </div>
+                <div style="text-align:center;">
+                    <div style="font-size:2rem; font-weight:bold; color:#10b981;">${answers.length}</div>
+                    <div style="font-size:0.9rem; color:#666;">طالب أنهى</div>
+                </div>
+            </div>
+        </div>
+    `;
+    
     if (!answers.length) {
-        html += '<div class="panel muted">لا توجد إجابات بعد.</div>';
+        html += '<div class="panel" style="text-align:center; padding:30px; color:#666;">📭 لا توجد إجابات بعد. انتظر حتى ينتهي الطلاب من الاختبار.</div>';
     } else {
-        html += `<table style='font-size:0.97em;'>
-            <tr><th>الاسم</th><th>السجل</th><th>الدرجة</th><th>تفاصيل</th></tr>`;
+        html += `
+        <div style="overflow-x:auto;">
+            <table style="width:100%; border-collapse:collapse; font-size:0.95rem;">
+                <thead>
+                    <tr style="background:#f8fafc;">
+                        <th style="padding:12px; text-align:right; border-bottom:2px solid #e2e8f0;">#</th>
+                        <th style="padding:12px; text-align:right; border-bottom:2px solid #e2e8f0;">الاسم</th>
+                        <th style="padding:12px; text-align:right; border-bottom:2px solid #e2e8f0;">السجل</th>
+                        <th style="padding:12px; text-align:center; border-bottom:2px solid #e2e8f0;">الدرجة</th>
+                        <th style="padding:12px; text-align:center; border-bottom:2px solid #e2e8f0;">النسبة</th>
+                        <th style="padding:12px; text-align:center; border-bottom:2px solid #e2e8f0;">تفاصيل</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+        
         answers.forEach((a, i) => {
-            const score = calcStudentScore(session, a.answers);
-            html += `<tr style='text-align:center; border-bottom:1px solid #eee;'>
-                <td>${a.studentName}</td>
-                <td>${a.studentId}</td>
-                <td>${score} / ${session.questions.length}</td>
-                <td><button onclick='window.showStudentDetails("${teacher.phone}",${sessionIdx},${i})'>عرض</button></td>
-            </tr>`;
+            const score = a.score !== undefined ? a.score : calcStudentScore(session, a.answers);
+            const total = session.questions.length;
+            const percentage = Math.round((score / total) * 100);
+            const passed = percentage >= 50;
+            const statusColor = passed ? '#10b981' : '#ef4444';
+            const statusBg = passed ? '#f0fdf4' : '#fef2f2';
+            
+            html += `
+                <tr style="border-bottom:1px solid #f1f5f9;">
+                    <td style="padding:12px; font-weight:bold; color:#64748b;">${i + 1}</td>
+                    <td style="padding:12px; font-weight:500;">${a.studentName}</td>
+                    <td style="padding:12px; color:#64748b;">${a.studentId}</td>
+                    <td style="padding:12px; text-align:center;">
+                        <span style="font-weight:bold; color:${statusColor};">${score}</span>
+                        <span style="color:#94a3b8;">/ ${total}</span>
+                    </td>
+                    <td style="padding:12px; text-align:center;">
+                        <span style="background:${statusBg}; color:${statusColor}; padding:4px 10px; border-radius:20px; font-weight:bold; font-size:0.9rem;">
+                            ${percentage}%
+                        </span>
+                    </td>
+                    <td style="padding:12px; text-align:center;">
+                        <button onclick='window.showStudentDetails("${teacher.phone}",${sessionIdx},${i})' style="padding:6px 14px; border:none; background:#3b82f6; color:white; border-radius:6px; cursor:pointer; font-size:0.85rem;">
+                            👁️ عرض
+                        </button>
+                    </td>
+                </tr>`;
         });
-        html += `</table>`;
+        
+        html += `</tbody></table></div>`;
+        
+        // إحصائيات
+        const totalStudents = answers.length;
+        const passedCount = answers.filter(a => {
+            const score = a.score !== undefined ? a.score : calcStudentScore(session, a.answers);
+            return (score / session.questions.length) >= 0.5;
+        }).length;
+        const avgScore = answers.reduce((sum, a) => {
+            return sum + (a.score !== undefined ? a.score : calcStudentScore(session, a.answers));
+        }, 0) / totalStudents;
+        
+        html += `
+        <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:12px; margin-top:20px;">
+            <div class="card" style="text-align:center; background:#f0f9ff;">
+                <div style="font-size:1.5rem; font-weight:bold; color:#0369a1;">${totalStudents}</div>
+                <div style="font-size:0.85rem; color:#666;">إجمالي الطلاب</div>
+            </div>
+            <div class="card" style="text-align:center; background:#f0fdf4;">
+                <div style="font-size:1.5rem; font-weight:bold; color:#10b981;">${passedCount}</div>
+                <div style="font-size:0.85rem; color:#666;">ناجح</div>
+            </div>
+            <div class="card" style="text-align:center; background:#fef2f2;">
+                <div style="font-size:1.5rem; font-weight:bold; color:#ef4444;">${totalStudents - passedCount}</div>
+                <div style="font-size:0.85rem; color:#666;">راسب</div>
+            </div>
+        </div>
+        `;
     }
-    html += `<div class=\"button-row\" style=\"justify-content:flex-end; margin-top:14px;\"><button id=\"backBtn\" class=\"btn-ghost\">رجوع</button></div>`;
+    
+    html += `<div class="button-row" style="justify-content:center; margin-top:20px;"><button id="backBtn" class="btn-ghost">⬅️ رجوع</button></div>`;
     app.innerHTML = html;
     window.showStudentDetails = (phone, sIdx, aIdx) => {
         const t = JSON.parse(localStorage.getItem('teacher_' + phone));
@@ -968,28 +1046,84 @@ function renderStudentExam(teacherPhone, sessionIdx, studentName, studentId) {
     let current = 0;
     let answers = [];
     let kicked = false;
-    // حماية ضد الغش
+    // حماية ضد الغش - حفظ في localStorage
     function kick(reason) {
         kicked = true;
-        app.innerHTML = `<div class=\"title\">تم إخراجك من الاختبار</div><div style='color:#d32f2f;'>${reason}</div>`;
+        const kickKey = `kicked_${teacherPhone}_${sessionIdx}_${studentId}`;
+        const deviceId = getDeviceFingerprint();
+        const deviceKickKey = `kicked_device_${teacherPhone}_${sessionIdx}_${deviceId}`;
+        localStorage.setItem(kickKey, JSON.stringify({ reason, time: Date.now() }));
+        localStorage.setItem(deviceKickKey, JSON.stringify({ reason, studentId, time: Date.now() }));
+        app.innerHTML = `
+            <div style="text-align:center; padding:40px 20px;">
+                <div style="font-size:60px; margin-bottom:20px;">🚫</div>
+                <div class="title" style="color:#dc2626;">تم إخراجك من الاختبار</div>
+                <div style="margin-top:16px; color:#666;">${reason}</div>
+                <div style="margin-top:20px; padding:16px; background:#fef2f2; border-radius:12px; color:#991b1b;">
+                    لا يمكنك إعادة الدخول للاختبار من هذا الجهاز
+                </div>
+            </div>
+        `;
+        window.onbeforeunload = null;
+        history.pushState(null, '', location.href);
+        window.onpopstate = () => history.pushState(null, '', location.href);
     }
     function showQ(idx) {
         if (kicked) return;
         const q = questions[idx];
-        let html = `<div class=\"title\">سؤال ${idx+1} من ${questions.length}</div>`;
-        html += `<div style=\"margin-bottom:12px; font-weight:bold;\">${q.text}</div>`;
+        
+        let html = `
+            <div style="margin-bottom:20px;">
+                <div class="title" style="margin-bottom:8px;">سؤال ${idx+1} من ${questions.length}</div>
+                <div style="width:100%; height:6px; background:#e5e7eb; border-radius:3px;">
+                    <div style="width:${((idx+1)/questions.length)*100}%; height:100%; background:linear-gradient(90deg,#3b82f6,#8b5cf6); border-radius:3px;"></div>
+                </div>
+            </div>
+            <div class="card" style="padding:20px; margin-bottom:20px;">
+                <div style="font-size:1.15rem; font-weight:bold; line-height:1.6;">${q.text}</div>
+            </div>
+        `;
+        
         if (q.type === 'اختيارات') {
+            html += '<div style="display:flex; flex-direction:column; gap:12px;">';
             q.options.forEach((opt, i) => {
-                html += `<div><input type='radio' name='ans' value='${i}' id='opt${i}'><label for='opt${i}'> ${opt}</label></div>`;
+                html += `
+                    <label for='opt${i}' class="card option-card" style="display:flex; align-items:center; padding:16px; margin:0; cursor:pointer; border:2px solid #e5e7eb; transition:all 0.2s;">
+                        <input type='radio' name='ans' value='${i}' id='opt${i}' style="width:20px; height:20px; margin-left:12px; cursor:pointer;">
+                        <span style="font-size:1.05rem;">${opt}</span>
+                    </label>
+                `;
             });
+            html += '</div>';
         } else if (q.type === 'صح أو خطأ') {
-            html += `<div><input type='radio' name='ans' value='صح' id='true'><label for='true'> صح</label></div>`;
-            html += `<div><input type='radio' name='ans' value='خطأ' id='false'><label for='false'> خطأ</label></div>`;
+            html += `
+                <div style="display:flex; gap:16px; justify-content:center;">
+                    <label for='true' class="card option-card" style="flex:1; display:flex; align-items:center; justify-content:center; padding:20px; cursor:pointer; border:2px solid #e5e7eb; max-width:150px;">
+                        <input type='radio' name='ans' value='صح' id='true' style="width:20px; height:20px; margin-left:10px; cursor:pointer;">
+                        <span style="font-size:1.1rem; color:#10b981;">✓ صح</span>
+                    </label>
+                    <label for='false' class="card option-card" style="flex:1; display:flex; align-items:center; justify-content:center; padding:20px; cursor:pointer; border:2px solid #e5e7eb; max-width:150px;">
+                        <input type='radio' name='ans' value='خطأ' id='false' style="width:20px; height:20px; margin-left:10px; cursor:pointer;">
+                        <span style="font-size:1.1rem; color:#ef4444;">✗ خطأ</span>
+                    </label>
+                </div>
+            `;
         } else if (q.type === 'أكمل الفراغ') {
-            html += `<input type='text' id='ansText' placeholder='اكتب إجابتك هنا'>`;
+            html += `<input type='text' id='ansText' placeholder='اكتب إجابتك هنا' style="width:100%; padding:16px; font-size:1.1rem; border:2px solid #e5e7eb; border-radius:10px; box-sizing:border-box;">`;
         }
-        html += `<button id='nextBtn' style='margin-top:16px;'>التالي</button>`;
+        
+        const isLast = idx + 1 >= questions.length;
+        html += `<button id='nextBtn' class="btn-start" style='width:100%; margin-top:24px; padding:16px; font-size:1.1rem;'>${isLast ? '✓ إرسال الإجابات' : 'التالي ←'}</button>`;
+        
         app.innerHTML = html;
+        
+        // تفعيل التأثيرات على الاختيارات
+        document.querySelectorAll('input[name="ans"]').forEach(input => {
+            input.onchange = () => {
+                document.querySelectorAll('.option-card').forEach(l => l.style.borderColor = '#e5e7eb');
+                input.parentElement.style.borderColor = '#3b82f6';
+            };
+        });
         document.getElementById('nextBtn').onclick = () => {
             let ans;
             if (q.type === 'اختيارات' || q.type === 'صح أو خطأ') {
@@ -1043,53 +1177,53 @@ function renderStudentExam(teacherPhone, sessionIdx, studentName, studentId) {
 }
 
 function renderStudentFinish(teacherPhone, sessionIdx, studentName, studentId, answers) {
-    // حفظ الإجابات في LocalStorage
+    // حفظ الإجابات في LocalStorage للدكتور
     const key = `answers_${teacherPhone}_${sessionIdx}`;
     let all = JSON.parse(localStorage.getItem(key) || '[]');
-    all.push({studentName, studentId, answers, time: new Date().toISOString()});
-    localStorage.setItem(key, JSON.stringify(all));
     
-    // حساب الدرجة
+    // حساب الدرجة لحفظها مع الإجابة
     const teacher = JSON.parse(localStorage.getItem('teacher_' + teacherPhone));
     const session = teacher.sessions[sessionIdx];
     let correct = 0;
-    let resultHtml = '';
-    
-    answers.forEach((a, i) => {
+    answers.forEach(a => {
         const q = session.questions[a.qIdx];
-        const isCorrect = String(a.ans).trim().toLowerCase() === String(q.correct).trim().toLowerCase();
-        if (isCorrect) correct++;
-        
-        const icon = isCorrect ? '✅' : '❌';
-        const color = isCorrect ? '#4caf50' : '#d32f2f';
-        resultHtml += `
-            <div class="card" style="border-right: 4px solid ${color}; margin-bottom: 12px;">
-                <div style="font-weight: bold; margin-bottom: 6px;">${icon} سؤال ${i+1}: ${q.text}</div>
-                <div>• إجابتك: <span style="color:${color};font-weight:bold;">${a.ans}</span></div>
-                ${!isCorrect ? `<div>• الإجابة الصحيحة: <span style="color:#4caf50;font-weight:bold;">${q.correct}</span></div>` : ''}
-            </div>
-        `;
+        if (q && String(a.ans).trim().toLowerCase() === String(q.correct).trim().toLowerCase()) {
+            correct++;
+        }
     });
     
-    const percentage = Math.round((correct / answers.length) * 100);
-    const grade = percentage >= 50 ? '🎉 ناجح' : '😞 راسب';
-    const gradeColor = percentage >= 50 ? '#4caf50' : '#d32f2f';
+    all.push({
+        studentName, 
+        studentId, 
+        answers, 
+        score: correct,
+        total: session.questions.length,
+        time: new Date().toISOString()
+    });
+    localStorage.setItem(key, JSON.stringify(all));
     
+    // حفظ أن الطالب أنهى الاختبار
+    const finishedKey = `finished_${teacherPhone}_${sessionIdx}_${studentId}`;
+    localStorage.setItem(finishedKey, 'true');
+    
+    // صفحة بسيطة - شكراً فقط بدون نتائج
     app.innerHTML = `
-        <div class="title">تم إرسال إجاباتك بنجاح</div>
-        <div class="card" style="text-align:center; background: linear-gradient(135deg, ${gradeColor}22, ${gradeColor}11); border: 2px solid ${gradeColor};">
-            <h2 style="color:${gradeColor}; margin: 8px 0;">${grade}</h2>
-            <div style="font-size: 18px; font-weight: bold;">درجتك: ${correct} من ${answers.length}</div>
-            <div style="font-size: 16px; color: #666;">${percentage}%</div>
+        <div style="text-align:center; padding:40px 20px;">
+            <div style="font-size:60px; margin-bottom:20px;">✅</div>
+            <div class="title" style="color:#10b981;">تم إرسال إجاباتك بنجاح</div>
+            <div style="margin-top:20px; color:#666; font-size:1.1rem;">شكراً لمشاركتك في الاختبار</div>
+            <div style="margin-top:30px; padding:20px; background:#f0f9ff; border-radius:12px; color:#0369a1;">
+                <div style="font-weight:bold;">📝 ${studentName}</div>
+                <div style="margin-top:8px;">سيتم إعلان النتائج لاحقاً من قبل الدكتور</div>
+            </div>
+            <div style="margin-top:30px; color:#999; font-size:0.9rem;">يمكنك إغلاق هذه الصفحة الآن</div>
         </div>
-        <div style="margin-top: 20px;">
-            <h3>تفاصيل الإجابات:</h3>
-            ${resultHtml}
-        </div>
-        <div style="text-align:center; margin-top:20px; color:#666;">شكراً لمشاركتك!</div>
     `;
     
-    // لا نمسح sessionStorage - نبقي على الحماية
+    // منع الرجوع أو التحديث
+    window.onbeforeunload = null;
+    history.pushState(null, '', location.href);
+    window.onpopstate = () => history.pushState(null, '', location.href);
 }
 
 // دالة خلط مصفوفة
