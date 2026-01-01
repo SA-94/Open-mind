@@ -504,8 +504,12 @@ function renderSessionDetails(teacher, sessionIdx) {
         t.sessions[sessionIdx] = session;
         localStorage.setItem('teacher_' + phone, JSON.stringify(t));
         document.getElementById('startExamBtn').textContent = session.started ? 'إيقاف الاختبار' : 'بدء الاختبار';
-        // كتابة الحالة إلى JSONBin للمزامنة الفورية
-        writeSessionState(phone, sessionIdx, { started: session.started, active: session.active !== false });
+        // كتابة الحالة إلى JSONBin للمزامنة الفورية (مع الأسئلة)
+        writeSessionState(phone, sessionIdx, { 
+            started: session.started, 
+            active: session.active !== false,
+            questions: session.questions // إضافة الأسئلة للمزامنة
+        });
         // عند البدء، نعلم الطلاب المنتظرين عبر حفظ حالة البدء (الطلاب لديهم Polling)
         if (session.started) {
             // يمكن إضافة لوج هنا أو إظهار نافذة منبثقة
@@ -522,9 +526,14 @@ function renderSessionDetails(teacher, sessionIdx) {
         t.sessions[sessionIdx] = session;
         localStorage.setItem('teacher_' + phone, JSON.stringify(t));
         document.getElementById('toggleActiveBtn').textContent = session.active === false ? 'فتح الباركود' : 'قفل الباركود';
-        // كتابة الحالة إلى JSONBin
-        writeSessionState(phone, sessionIdx, { started: session.started === true, active: session.active !== false });
+        // كتابة الحالة إلى JSONBin (مع الأسئلة)
+        writeSessionState(phone, sessionIdx, { 
+            started: session.started === true, 
+            active: session.active !== false,
+            questions: session.questions
+        });
         alert('تم تحديث حالة الجلسة');
+    };
     };
     document.getElementById('backBtn').onclick = () => renderTeacherHome(teacher);
     document.getElementById('showResultsBtn').onclick = () => renderSessionResults(teacher, sessionIdx);
@@ -585,7 +594,11 @@ function renderSessionInfo(phone, sessionIdx) {
         t.sessions[sessionIdx] = session;
         localStorage.setItem('teacher_' + phone, JSON.stringify(t));
         document.getElementById('startExamBtn').textContent = session.started ? 'إيقاف الاختبار' : 'بدء الاختبار';
-        writeSessionState(phone, sessionIdx, { started: session.started, active: session.active !== false });
+        writeSessionState(phone, sessionIdx, { 
+            started: session.started, 
+            active: session.active !== false,
+            questions: session.questions
+        });
         alert(session.started ? 'تم بدء الاختبار.' : 'تم إيقاف الاختبار.');
     };
     document.getElementById('toggleActiveBtn').onclick = () => {
@@ -593,7 +606,11 @@ function renderSessionInfo(phone, sessionIdx) {
         t.sessions[sessionIdx] = session;
         localStorage.setItem('teacher_' + phone, JSON.stringify(t));
         document.getElementById('toggleActiveBtn').textContent = session.active===false? 'فتح الباركود':'قفل الباركود';
-        writeSessionState(phone, sessionIdx, { started: session.started === true, active: session.active !== false });
+        writeSessionState(phone, sessionIdx, { 
+            started: session.started === true, 
+            active: session.active !== false,
+            questions: session.questions
+        });
         alert('تم تحديث حالة الجلسة');
     };
     document.getElementById('showResultsBtn').onclick = () => renderSessionResults(t, sessionIdx);
@@ -933,7 +950,8 @@ function handleAddQ(teacher, session) {
 
 // --- صفحة الطالب ---
 function renderStudentEntry(teacherPhone, sessionIdx) {
-    const session = JSON.parse(localStorage.getItem('teacher_' + teacherPhone)).sessions[sessionIdx];
+    // محاولة قراءة بيانات الجلسة من localStorage أو من JSONBin
+    const teacherData = localStorage.getItem('teacher_' + teacherPhone);
     
     // فحص إذا كان الطالب بدأ الاختبار من قبل (منع إعادة الدخول)
     const savedStudentId = sessionStorage.getItem('studentId');
@@ -1005,34 +1023,17 @@ function renderStudentWaiting(teacherPhone, sessionIdx, name, id) {
         console.warn('⚠️ لا يوجد bin في الرابط - سيعمل polling المحلي فقط');
     }
     
-    // polling مزدوج: localStorage (للعمل المحلي) + JSONBin (للأجهزة البعيدة)
+    // polling: قراءة حالة الجلسة من JSONBin
     poll = setInterval(()=>{
-        // فحص localStorage أولاً (للعمل على نفس الجهاز)
-        const t = JSON.parse(localStorage.getItem('teacher_' + teacherPhone));
-        if (!t || !t.sessions[sessionIdx]) {
-            clearInterval(poll);
-            app.innerHTML = `<div class="title">الجلسة غير موجودة</div><div>الجلسة تم حذفها أو غير موجودة.</div>`;
-            return;
-        }
-        const s = t.sessions[sessionIdx];
-        if (s.started) {
-            clearInterval(poll);
-            // حذف من قائمة الانتظار
-            const readyKey = `ready_${teacherPhone}_${sessionIdx}`;
-            let arr = JSON.parse(localStorage.getItem(readyKey) || '[]');
-            arr = arr.filter(r=>r.studentId !== id);
-            localStorage.setItem(readyKey, JSON.stringify(arr));
-            renderStudentExam(teacherPhone, sessionIdx, name, id);
-        } else if (s.active === false) {
-            clearInterval(poll);
-            app.innerHTML = `<div class="title">الجلسة مغلقة</div><div>عذراً، هذه الجلسة غير متاحة حالياً.</div>`;
-        }
-        
-        // فحص JSONBin للمزامنة مع الأجهزة البعيدة
+        // قراءة من JSONBin للمزامنة بين الأجهزة
         readSessionState(teacherPhone, sessionIdx, remoteState => {
-            if (!remoteState) return;
+            if (!remoteState) {
+                console.log('⏳ لا توجد حالة بعد - انتظار...');
+                return;
+            }
             console.log('🔄 حالة الجلسة من JSONBin:', remoteState);
-            if (remoteState.started) {
+            
+            if (remoteState.started === true) {
                 clearInterval(poll);
                 const readyKey = `ready_${teacherPhone}_${sessionIdx}`;
                 let arr = JSON.parse(localStorage.getItem(readyKey) || '[]');
@@ -1044,13 +1045,27 @@ function renderStudentWaiting(teacherPhone, sessionIdx, name, id) {
                 app.innerHTML = `<div class="title">الجلسة مغلقة</div><div>عذراً، هذه الجلسة غير متاحة حالياً.</div>`;
             }
         });
+        
+        // فحص localStorage أيضاً للعمل على نفس الجهاز
+        const t = JSON.parse(localStorage.getItem('teacher_' + teacherPhone) || 'null');
+        if (t && t.sessions && t.sessions[sessionIdx]) {
+            const s = t.sessions[sessionIdx];
+            if (s.started) {
+                clearInterval(poll);
+                const readyKey = `ready_${teacherPhone}_${sessionIdx}`;
+                let arr = JSON.parse(localStorage.getItem(readyKey) || '[]');
+                arr = arr.filter(r=>r.studentId !== id);
+                localStorage.setItem(readyKey, JSON.stringify(arr));
+                renderStudentExam(teacherPhone, sessionIdx, name, id);
+            } else if (s.active === false) {
+                clearInterval(poll);
+                app.innerHTML = `<div class="title">الجلسة مغلقة</div><div>عذراً، هذه الجلسة غير متاحة حالياً.</div>`;
+            }
+        }
     }, 1000);
 }
 
 function renderStudentExam(teacherPhone, sessionIdx, studentName, studentId) {
-    const teacher = JSON.parse(localStorage.getItem('teacher_' + teacherPhone));
-    const session = teacher.sessions[sessionIdx];
-    
     // فحص device fingerprint - منع إعادة الدخول بجوال آخر
     const deviceId = getDeviceFingerprint();
     const deviceKickKey = `kicked_device_${teacherPhone}_${sessionIdx}_${deviceId}`;
@@ -1079,34 +1094,56 @@ function renderStudentExam(teacherPhone, sessionIdx, studentName, studentId) {
         return;
     }
     
-    // حفظ أن الطالب بدأ الاختبار (لمنع إعادة الدخول)
-    const examStartedKey = `exam_started_${teacherPhone}_${sessionIdx}_${studentId}`;
-    localStorage.setItem(examStartedKey, 'true');
+    // عرض رسالة تحميل
+    app.innerHTML = `
+        <div style="text-align:center; padding:40px;">
+            <div class="loading-spinner" style="width:50px; height:50px; border:4px solid #e5e7eb; border-top-color:#3b82f6; border-radius:50%; animation:spin 1s linear infinite; margin:0 auto;"></div>
+            <div style="margin-top:20px; color:#666;">جاري تحميل الاختبار...</div>
+        </div>
+        <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
+    `;
     
-    // حفظ أو استرجاع ترتيب الأسئلة المخلوطة
-    const shuffleKey = `shuffled_${teacherPhone}_${sessionIdx}_${studentId}`;
-    let questions;
-    const savedShuffle = sessionStorage.getItem(shuffleKey);
-    if (savedShuffle) {
-        questions = JSON.parse(savedShuffle);
-    } else {
-        questions = session.questions.map((q, i) => ({...q, idx: i}));
-        questions = shuffleArray(questions);
-        sessionStorage.setItem(shuffleKey, JSON.stringify(questions));
-    }
+    // محاولة تحميل الأسئلة من localStorage أو JSONBin
+    const teacherData = localStorage.getItem('teacher_' + teacherPhone);
     
-    let current = 0;
-    let answers = [];
-    let kicked = false;
-    // حماية ضد الغش - حفظ في localStorage
-    function kick(reason) {
-        kicked = true;
-        const kickKey = `kicked_${teacherPhone}_${sessionIdx}_${studentId}`;
-        const deviceId = getDeviceFingerprint();
-        const deviceKickKey = `kicked_device_${teacherPhone}_${sessionIdx}_${deviceId}`;
-        localStorage.setItem(kickKey, JSON.stringify({ reason, time: Date.now() }));
-        localStorage.setItem(deviceKickKey, JSON.stringify({ reason, studentId, time: Date.now() }));
-        app.innerHTML = `
+    function startExamWithSession(session) {
+        if (!session || !session.questions || session.questions.length === 0) {
+            app.innerHTML = `
+                <div class="title">خطأ في تحميل الاختبار</div>
+                <div style="color:#d32f2f; margin-top:12px;">عذراً، لم نتمكن من تحميل أسئلة الاختبار.</div>
+            `;
+            return;
+        }
+        
+        // حفظ أن الطالب بدأ الاختبار (لمنع إعادة الدخول)
+        const examStartedKey = `exam_started_${teacherPhone}_${sessionIdx}_${studentId}`;
+        localStorage.setItem(examStartedKey, 'true');
+        
+        // حفظ أو استرجاع ترتيب الأسئلة المخلوطة
+        const shuffleKey = `shuffled_${teacherPhone}_${sessionIdx}_${studentId}`;
+        let questions;
+        const savedShuffle = sessionStorage.getItem(shuffleKey);
+        if (savedShuffle) {
+            questions = JSON.parse(savedShuffle);
+        } else {
+            questions = session.questions.map((q, i) => ({...q, idx: i}));
+            questions = shuffleArray(questions);
+            sessionStorage.setItem(shuffleKey, JSON.stringify(questions));
+        }
+        
+        let current = 0;
+        let answers = [];
+        let kicked = false;
+        
+        // حماية ضد الغش - حفظ في localStorage
+        function kick(reason) {
+            kicked = true;
+            const kickKey = `kicked_${teacherPhone}_${sessionIdx}_${studentId}`;
+            const deviceId = getDeviceFingerprint();
+            const deviceKickKey = `kicked_device_${teacherPhone}_${sessionIdx}_${deviceId}`;
+            localStorage.setItem(kickKey, JSON.stringify({ reason, time: Date.now() }));
+            localStorage.setItem(deviceKickKey, JSON.stringify({ reason, studentId, time: Date.now() }));
+            app.innerHTML = `
             <div style="text-align:center; padding:40px 20px;">
                 <div style="font-size:60px; margin-bottom:20px;">🚫</div>
                 <div class="title" style="color:#dc2626;">تم إخراجك من الاختبار</div>
@@ -1226,6 +1263,32 @@ function renderStudentExam(teacherPhone, sessionIdx, studentName, studentId) {
         });
     }
     showQ(current);
+    } // نهاية دالة startExamWithSession
+    
+    // محاولة تحميل الأسئلة
+    if (teacherData) {
+        // البيانات موجودة محلياً
+        const teacher = JSON.parse(teacherData);
+        if (teacher && teacher.sessions && teacher.sessions[sessionIdx]) {
+            startExamWithSession(teacher.sessions[sessionIdx]);
+        } else {
+            app.innerHTML = `<div class="title">خطأ</div><div>الجلسة غير موجودة.</div>`;
+        }
+    } else {
+        // البيانات غير موجودة - نحملها من JSONBin
+        console.log('📥 تحميل الأسئلة من JSONBin...');
+        readSessionState(teacherPhone, sessionIdx, remoteState => {
+            if (remoteState && remoteState.questions) {
+                console.log('✅ تم تحميل الأسئلة:', remoteState.questions.length);
+                startExamWithSession({ questions: remoteState.questions });
+            } else {
+                app.innerHTML = `
+                    <div class="title">خطأ في تحميل الاختبار</div>
+                    <div style="color:#d32f2f; margin-top:12px;">عذراً، لم نتمكن من تحميل الأسئلة. تأكد من صحة رابط الاختبار.</div>
+                `;
+            }
+        });
+    }
 }
 
 function renderStudentFinish(teacherPhone, sessionIdx, studentName, studentId, answers) {
